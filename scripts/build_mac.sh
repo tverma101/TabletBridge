@@ -1,0 +1,121 @@
+#!/bin/bash
+set -e
+
+# Get absolute path to root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Read version
+VERSION=$(cat "$ROOT_DIR/VERSION" | tr -d '[:space:]')
+echo "Building version $VERSION..."
+
+cd "$ROOT_DIR/MacHost"
+
+# Stop only this checkout's generated bundle. Do not kill an unrelated host.
+echo "Stopping this checkout's Tablet Bridge bundle..."
+pkill -f "$ROOT_DIR/TabletBridge.app/Contents/MacOS/TabletBridge" 2>/dev/null || true
+sleep 0.5
+
+# Clean old build
+echo "Cleaning old build..."
+rm -rf .build
+
+# Build fresh (Universal Binary: arm64 + x86_64)
+echo "Building macOS Host (arm64)..."
+swift build -c release --arch arm64
+
+echo "Building macOS Host (x86_64)..."
+swift build -c release --arch x86_64
+
+echo "Creating Universal Binary..."
+mkdir -p ".build/release-universal"
+lipo -create \
+  .build/arm64-apple-macosx/release/TabletBridge \
+  .build/x86_64-apple-macosx/release/TabletBridge \
+  -output .build/release-universal/TabletBridge
+
+# Create .app bundle
+APP_NAME="TabletBridge"
+APP_DIR="$ROOT_DIR/$APP_NAME.app"
+
+echo "Creating app bundle..."
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS"
+mkdir -p "$APP_DIR/Contents/Resources"
+
+# Copy universal binary
+cp .build/release-universal/TabletBridge "$APP_DIR/Contents/MacOS/"
+
+# No LaunchAgent plist needed for SMAppService.mainApp
+
+# Copy app icon if exists
+if [ -f "$ROOT_DIR/MacHost/Resources/AppIcon.icns" ]; then
+    cp "$ROOT_DIR/MacHost/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/"
+    echo "  ✓ App icon copied"
+fi
+
+# Create Info.plist
+cat > "$APP_DIR/Contents/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>TabletBridge</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.tabletbridge.host</string>
+    <key>CFBundleName</key>
+    <string>Tablet Bridge</string>
+    <key>CFBundleDisplayName</key>
+    <string>Tablet Bridge</string>
+    <key>CFBundleVersion</key>
+    <string>$VERSION</string><!-- VERSION -->
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string><!-- VERSION -->
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <false/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Tablet Bridge needs screen recording access to capture your virtual display and stream it to your Android device.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Tablet Bridge needs Local Network access so your Android tablet can connect to the Mac over WiFi for wireless mode. Without this, only USB-tethered connections work.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_sidescreen._tcp</string>
+    </array>
+</dict>
+</plist>
+EOF
+
+# Sign every installed development build with the same Apple Development
+# identity. The signing helper fails closed instead of silently creating an
+# ad-hoc build that macOS will treat as a new TCC identity.
+echo "Code signing (stable Apple Development identity)..."
+"$SCRIPT_DIR/sign_mac_app.sh" "$APP_DIR"
+echo "  ✓ App signed"
+
+echo ""
+echo "Build successful!"
+echo ""
+echo "App: $ROOT_DIR/$APP_NAME.app"
+echo "To run: open $APP_NAME.app"
+
+# Create DMG with Applications symlink
+echo ""
+echo "Creating DMG..."
+DMG_DIR=$(mktemp -d)
+cp -R "$APP_DIR" "$DMG_DIR/"
+ln -s /Applications "$DMG_DIR/Applications"
+DMG_PATH="$ROOT_DIR/TabletBridge-${VERSION}-mac-universal.dmg"
+hdiutil create -volname "Tablet Bridge" -srcfolder "$DMG_DIR" -ov -format UDZO "$DMG_PATH"
+rm -rf "$DMG_DIR"
+echo "DMG: $DMG_PATH"

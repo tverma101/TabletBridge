@@ -1,0 +1,625 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="24dp"
+    android:layout_marginEnd="24dp"
+    android:layout_marginTop="40dp"
+    android:layout_marginBottom="40dp"
+    app:cardCornerRadius="28dp"
+    app:cardBackgroundColor="@color/ss_scrim_strong"
+    app:cardElevation="24dp">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="true"
+        android:fadeScrollbars="true"
+        android:scrollIndicators="bottom"
+        android:overScrollMode="ifContentScrolls">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="32dp">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Display Settings"
+            android:textColor="@color/ss_text_primary"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="32dp" />
+
+        <!-- Show Stats Toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Show Stats"
+                    android:textColor="@color/ss_text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="FPS, bitrate, resolution"
+                    android:textColor="@color/ss_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/showStatsSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                app:thumbTint="@color/switch_thumb_color"
+                app:trackTint="@color/switch_track_color" />
+        </LinearLayout>
+
+        <!-- Video Super Resolution Toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Video Super Resolution"
+                    android:textColor="@color/ss_text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/vsrStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="GPU postprocess (SGSR1 / CAS)"
+                    android:textColor="@color/ss_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/vsrSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                app:thumbTint="@color/switch_thumb_color"
+                app:trackTint="@color/switch_track_color" />
+        </LinearLayout>
+
+        <!-- Android SDR Color Profile -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Android Color Profile"
+                    android:textColor="@color/ss_text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/androidColorProfileStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Neutral sRGB / BT.709 chroma balance"
+                    android:textColor="@color/ss_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/androidColorProfileSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                app:thumbTint="@color/switch_thumb_color"
+                app:trackTint="@color/switch_track_color" />
+        </LinearLayout>
+
+        <!-- VSR Mode Selector -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Mode"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/vsrModeBridge"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="Bridge"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                app:cornerRadius="10dp"
+                app:strokeColor="@color/ss_accent"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/vsrModeSgsr"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="SGSR1"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                app:cornerRadius="10dp"
+                app:strokeColor="@color/ss_accent"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/vsrModeCas"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="CAS"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="12sp"
+                app:cornerRadius="10dp"
+                app:strokeColor="@color/ss_accent"
+                app:strokeWidth="1dp" />
+        </LinearLayout>
+
+        <!-- VSR Sharpness (CAS) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sharpness (CAS)"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/vsrSharpnessValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.80"
+                android:textColor="@color/ss_accent"
+                android:textSize="15sp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/vsrSharpnessSlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="0.0"
+                android:valueTo="1.0"
+                android:value="0.8"
+                android:stepSize="0.05"
+                app:thumbColor="@color/ss_text_primary"
+                app:trackColorActive="@color/ss_accent"
+                app:trackColorInactive="@color/ss_surface_tint_strong"
+                app:trackHeight="4dp" />
+        </LinearLayout>
+
+        <!-- VSR Edge Threshold (SGSR1) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Edge Threshold (SGSR1)"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/vsrEdgeValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.031"
+                android:textColor="@color/ss_accent"
+                android:textSize="15sp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/vsrEdgeSlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="0.0"
+                android:valueTo="0.1"
+                android:value="0.031"
+                android:stepSize="0.005"
+                app:thumbColor="@color/ss_text_primary"
+                app:trackColorActive="@color/ss_accent"
+                app:trackColorInactive="@color/ss_surface_tint_strong"
+                app:trackHeight="4dp" />
+        </LinearLayout>
+
+        <!-- Hide Settings Icon Toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hide Settings Icon"
+                    android:textColor="@color/ss_text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Use the back gesture to reveal it while streaming"
+                    android:textColor="@color/ss_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/hideSettingsSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                app:thumbTint="@color/switch_thumb_color"
+                app:trackTint="@color/switch_track_color" />
+        </LinearLayout>
+
+        <!-- Opacity Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Overlay Opacity"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/opacityValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="80%"
+                android:textColor="@color/ss_accent"
+                android:textSize="15sp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/opacitySlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="0.2"
+                android:valueTo="1.0"
+                android:value="0.8"
+                android:stepSize="0.05"
+                app:thumbColor="@color/ss_text_primary"
+                app:trackColorActive="@color/ss_accent"
+                app:trackColorInactive="@color/ss_surface_tint_strong"
+                app:trackHeight="4dp" />
+        </LinearLayout>
+
+        <!-- Settings Button Position - 8 directions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/settings_item_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Settings Button Position"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <!-- 8 Position Grid (3x3 without center) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Top Row: TopLeft, TopCenter, TopRight -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="6dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/cornerTopLeft"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↖"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginEnd="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/positionTopCenter"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↑"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginStart="3dp"
+                        android:layout_marginEnd="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/cornerTopRight"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↗"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginStart="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+
+                <!-- Middle Row: Left, (empty center), Right -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="6dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/positionCenterLeft"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="←"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginEnd="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+
+                    <!-- Empty center space -->
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="3dp"
+                        android:layout_marginEnd="3dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/positionCenterRight"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="→"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginStart="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+
+                <!-- Bottom Row: BottomLeft, BottomCenter, BottomRight -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/cornerBottomLeft"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↙"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginEnd="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/positionBottomCenter"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↓"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginStart="3dp"
+                        android:layout_marginEnd="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/cornerBottomRight"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="↘"
+                        android:textColor="@color/ss_text_primary"
+                        android:textSize="18sp"
+                        android:layout_marginStart="3dp"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/ss_accent"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Action Buttons Row 1 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="center">
+
+            <!-- Reset Overlay Position Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/resetPositionButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="Reset Overlay"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="12sp"
+                android:layout_marginEnd="4dp"
+                app:cornerRadius="14dp"
+                app:strokeColor="@color/ss_surface_tint_strong"
+                app:strokeWidth="1dp"
+                app:backgroundTint="@color/ss_surface_tint" />
+
+            <!-- Reset Settings Button Position -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/resetSettingsButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="Reset Button"
+                android:textColor="@color/ss_text_primary"
+                android:textSize="12sp"
+                android:layout_marginStart="4dp"
+                app:cornerRadius="14dp"
+                app:strokeColor="@color/ss_surface_tint_strong"
+                app:strokeWidth="1dp"
+                app:backgroundTint="@color/ss_surface_tint" />
+        </LinearLayout>
+
+        <!-- Disconnect Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/disconnectSettingsButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Disconnect"
+            android:textColor="@color/ss_error"
+            android:textSize="13sp"
+            android:layout_marginTop="8dp"
+            app:cornerRadius="14dp"
+            app:strokeColor="@color/ss_error"
+            app:strokeWidth="1dp"
+            app:backgroundTint="@color/ss_error_tint" />
+
+        <!-- Close Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/closeButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="DONE"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:cornerRadius="16dp"
+            app:backgroundTint="@color/ss_accent" />
+
+    </LinearLayout>
+    </ScrollView>
+</androidx.cardview.widget.CardView>

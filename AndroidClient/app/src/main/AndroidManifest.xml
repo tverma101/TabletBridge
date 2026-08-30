@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Real panel backlight control (Settings.System.SCREEN_BRIGHTNESS).
+         Appop-granted via adb: appops set dev.tabletbridge.app WRITE_SETTINGS allow -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Pairing state is a local access credential; do not include it in
+         Android's device/cloud backup flows. -->
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Tablet Bridge"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:screenOrientation="fullUser"
+            android:configChanges="orientation|screenSize|screenLayout"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".QRScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Internal PixelCopy/native reference surface for the opt-in lab. -->
+        <activity
+            android:name=".LabActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+    </application>
+
+</manifest>

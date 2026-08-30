@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tablet Bridge dark display palette. Keep components on semantic tokens. -->
+    <color name="ss_background">#FF080B0E</color>
+    <color name="ss_surface">#FF10161C</color>
+    <color name="ss_surface_raised">#FF151D24</color>
+    <color name="ss_surface_strong">#FF1C2730</color>
+    <color name="ss_outline">#FF2B3945</color>
+    <color name="ss_outline_strong">#FF3F5261</color>
+
+    <color name="ss_text_primary">#FFF4F7F9</color>
+    <color name="ss_text_secondary">#FFA9B5BF</color>
+    <color name="ss_text_tertiary">#FF74828D</color>
+
+    <color name="ss_accent">#FF53D8FF</color>
+    <color name="ss_accent_strong">#FF20B8E6</color>
+    <color name="ss_on_accent">#FF041117</color>
+    <color name="ss_success">#FF5EE6A8</color>
+    <color name="ss_warning">#FFFFC857</color>
+    <color name="ss_error">#FFFF6B7A</color>
+    <color name="ss_error_soft">#FFFFB4BE</color>
+    <color name="ss_error_container">#FF3A1820</color>
+    <color name="ss_info">#FF9BAEFF</color>
+
+    <color name="ss_scrim">#CC080B0E</color>
+    <color name="ss_scrim_strong">#E6080B0E</color>
+    <color name="ss_surface_tint">#1AF4F7F9</color>
+    <color name="ss_surface_tint_strong">#33F4F7F9</color>
+    <color name="ss_accent_tint">#2653D8FF</color>
+    <color name="ss_error_tint">#26FF6B7A</color>
+    <color name="ss_transparent">#00000000</color>
+
+    <!-- Compatibility names retained for platform/vector resources. -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

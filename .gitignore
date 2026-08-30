@@ -1,0 +1,69 @@
+# macOS
+.DS_Store
+**/.DS_Store
+Thumbs.db
+DerivedData/
+*.app
+
+# Android build
+AndroidClient/app/build/
+AndroidClient/.gradle/
+AndroidClient/build/
+AndroidClient/local.properties
+AndroidClient/.idea/
+*.apk
+*.aab
+*.dmg
+*.iml
+*.keystore
+
+# macOS build (main + test apps)
+**/.build/
+**/.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# IDE
+.idea/
+*.xcworkspace/
+*.xcuserdata/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build artifacts
+build/
+dist/
+*.o
+*.dSYM/
+
+# Env
+.env
+.env.local
+*.pem
+
+# Docs (local design docs)
+docs/*
+!docs/transport-latency.md
+!docs/codex/
+!docs/codex/turn-log.md
+
+# Temporary
+tmp/
+temp/
+*.tmp
+.superpowers/
+
+# Local evaluation output (receipts remain under docs/eval)
+runs/
+
+# Local ktlint binary (CI downloads its own)
+AndroidClient/ktlint

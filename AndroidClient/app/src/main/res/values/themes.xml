@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ss_accent</item>
+        <item name="colorPrimaryVariant">@color/ss_accent_strong</item>
+        <item name="colorOnPrimary">@color/ss_on_accent</item>
+        <item name="colorSecondary">@color/ss_info</item>
+        <item name="colorSecondaryVariant">@color/ss_info</item>
+        <item name="colorOnSecondary">@color/ss_text_primary</item>
+        <item name="colorSurface">@color/ss_surface</item>
+        <item name="colorOnSurface">@color/ss_text_primary</item>
+        <item name="colorControlNormal">@color/ss_text_secondary</item>
+        <item name="colorControlActivated">@color/ss_accent</item>
+        <item name="colorControlHighlight">@color/ss_surface_tint_strong</item>
+        <item name="colorAccent">@color/ss_accent</item>
+        <item name="android:windowBackground">@color/ss_background</item>
+        <item name="android:statusBarColor">@color/ss_background</item>
+        <item name="android:navigationBarColor">@color/ss_background</item>
+        <item name="android:navigationBarDividerColor">@color/ss_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
