@@ -43,20 +43,22 @@ local device details, or upstream fundraising and support links.
 
 ## Evidence state
 
-Implementation: committed locally in the one-commit public staging checkout;
-canonical private checkout unchanged.
+Implementation: committed in a separate public snapshot checkout with no
+inherited private history; canonical private checkout unchanged.
 Testing: source, package, metadata, and packaging checks passed. Existing
 compiler deprecation/unused-value warnings remain; no new warning triage was
 performed.
 Installed/live: not claimed; no Tablet Bridge public artifact has been
 installed on a user device or exercised through a real Mac-to-Android session.
-User-confirmed: pending exact public name and legal contact confirmation.
+User-confirmed: operator confirmed `publish TabletBridge`.
 
-## Blocker and next action
+## Publication result
 
-Do not create, rename, push, or make a GitHub repository public until the
-operator confirms the public repository name and the legal/contact identity to
-publish in project policies. Then create the clean public repository, push
-only this snapshot, verify the remote contents, and make that exact repository
-public. A real USB/wireless hardware session remains a separate post-
+Published repository: <https://github.com/tverma101/TabletBridge>
+
+The repository was created separately from the private SideScreen repository,
+then pushed and verified before its visibility was changed to public. The
+public repository is not a GitHub fork, has `main` as its only branch, and
+contains the reviewed legal/provenance files without the excluded private
+paths. A real USB/wireless hardware session remains a separate post-
 publication validation boundary.
