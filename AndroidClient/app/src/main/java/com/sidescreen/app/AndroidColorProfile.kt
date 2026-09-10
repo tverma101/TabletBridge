@@ -15,10 +15,18 @@ package com.sidescreen.app
  */
 object AndroidColorProfile {
     const val NAME = "Android sRGB / BT.709 Tone Balance"
-    const val DEFAULT_ENABLED = true
 
     /**
-     * The experimental USB bridge is a quality/power diagnostic path, not a
+     * Efficiency-first default for wired streaming. When disabled, ordinary
+     * USB sessions can stay on MediaCodec -> Surface with no SurfaceTexture,
+     * EGL context, bridge shader, render thread, or extra presentation cap.
+     * Users who prefer the measured tone correction can opt in; an explicitly
+     * saved preference continues to override this default.
+     */
+    const val DEFAULT_ENABLED = false
+
+    /**
+     * The optional USB bridge is a quality/power diagnostic path, not a
      * high-refresh gaming path. Keep its Android presentation at a stable
      * 60 FPS while leaving the normal USB and wireless policies independent.
      */
