@@ -70,6 +70,7 @@ class StreamClient(
     private var lastKeyframeReceivedNs = 0L
     @Volatile private var macToAndroidOffsetNs: Long? = null
     @Volatile private var videoClockSyncReady = false
+    @Volatile private var frameTracingEnabled = false
     private var videoClockSyncEstimator = ClockOffsetEstimator()
     private var touchWriteCount = 0L
     private var touchWriteAccumNs = 0L
@@ -351,13 +352,15 @@ class StreamClient(
 
     private fun advertiseFrameMetadataSupport() {
         outputStream?.let { out ->
-            // Trace capability must precede type 8 because type 8 may cause a
-            // legacy-compatible host to finish protocol startup immediately.
+            // Keep keyframe/timestamp metadata available in production, but
+            // do not opt into the lab-grade frame-ID trace unless a trace
+            // recording is explicitly active. This avoids per-frame trace
+            // object/map bookkeeping on the normal wired path.
             out.writeByte(MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC)
-            out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE)
+            if (frameTracingEnabled) out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE)
             out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_METADATA)
             out.flush()
-            diagLog("Advertised frame trace/metadata support")
+            diagLog("Advertised frame metadata support (trace=$frameTracingEnabled)")
         }
     }
 
@@ -505,6 +508,26 @@ class StreamClient(
                 disconnect()
             }
         }
+
+    /** Enable expensive per-frame trace bookkeeping only for an explicit lab run. */
+    fun setFrameTracingEnabled(enabled: Boolean) {
+        if (frameTracingEnabled == enabled) return
+        frameTracingEnabled = enabled
+        if (!isConnected) return
+        touchScope.launch {
+            try {
+                outputStream?.let { out ->
+                    out.writeByte(
+                        if (enabled) MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE
+                        else MESSAGE_CLIENT_DISABLES_FRAME_TRACE,
+                    )
+                    out.flush()
+                    diagLog("Frame tracing ${if (enabled) "enabled" else "disabled"}")
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     fun sendTouch(
         x: Float,
@@ -693,7 +716,7 @@ class StreamClient(
         val translatedCaptureNs = macToAndroidOffsetNs?.let { offset ->
             translateMacTimestampToAndroid(hostCaptureTimestampNs, offset)
         } ?: 0L
-        val trace = if (hostCaptureTimestampNs > 0L) {
+        val trace = if (frameTracingEnabled && hostCaptureTimestampNs > 0L) {
             FrameTrace(
                 frameId = frameId,
                 hostCaptureNs = hostCaptureTimestampNs,
@@ -801,6 +824,7 @@ class StreamClient(
         private const val MESSAGE_KEYFRAME_REQUEST = 7
         private const val MESSAGE_CLIENT_SUPPORTS_FRAME_METADATA = 8
         private const val MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE = 13
+        private const val MESSAGE_CLIENT_DISABLES_FRAME_TRACE = 16
         private const val MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC = 15
         private const val MESSAGE_CLIENT_AVC_ONLY = 9
         private const val MESSAGE_CODEC_SELECTED = 10
