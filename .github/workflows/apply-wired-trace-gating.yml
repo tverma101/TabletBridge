@@ -1,0 +1,81 @@
+name: Apply wired trace gating
+
+on:
+  push:
+    branches:
+      - perf/runtime-efficiency-2026-09-10
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/runtime-efficiency-2026-09-10
+      - name: Gate per-frame tracing behind lab mode
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if new in text:
+                  return
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, got {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          sc = "AndroidClient/app/src/main/java/com/sidescreen/app/StreamClient.kt"
+          replace_once(sc,
+              "    @Volatile private var videoClockSyncReady = false\n    private var videoClockSyncEstimator = ClockOffsetEstimator()",
+              "    @Volatile private var videoClockSyncReady = false\n    @Volatile private var frameTracingEnabled = false\n    private var videoClockSyncEstimator = ClockOffsetEstimator()")
+          replace_once(sc,
+              '''            // Trace capability must precede type 8 because type 8 may cause a\n            // legacy-compatible host to finish protocol startup immediately.\n            out.writeByte(MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC)\n            out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE)\n            out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_METADATA)\n            out.flush()\n            diagLog("Advertised frame trace/metadata support")''',
+              '''            // Keep keyframe/timestamp metadata available in production, but\n            // do not opt into the lab-grade frame-ID trace unless a trace\n            // recording is explicitly active. This avoids per-frame trace\n            // object/map bookkeeping on the normal wired path.\n            out.writeByte(MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC)\n            if (frameTracingEnabled) out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE)\n            out.writeByte(MESSAGE_CLIENT_SUPPORTS_FRAME_METADATA)\n            out.flush()\n            diagLog("Advertised frame metadata support (trace=$frameTracingEnabled)")''')
+          replace_once(sc,
+              "        val trace = if (hostCaptureTimestampNs > 0L) {",
+              "        val trace = if (frameTracingEnabled && hostCaptureTimestampNs > 0L) {")
+          replace_once(sc,
+              '''    fun sendTouch(\n        x: Float,''',
+              '''    /** Enable expensive per-frame trace bookkeeping only for an explicit lab run. */\n    fun setFrameTracingEnabled(enabled: Boolean) {\n        if (frameTracingEnabled == enabled) return\n        frameTracingEnabled = enabled\n        if (!isConnected) return\n        touchScope.launch {\n            try {\n                outputStream?.let { out ->\n                    out.writeByte(\n                        if (enabled) MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE\n                        else MESSAGE_CLIENT_DISABLES_FRAME_TRACE,\n                    )\n                    out.flush()\n                    diagLog("Frame tracing ${if (enabled) "enabled" else "disabled"}")\n                }\n            } catch (_: Exception) {\n            }\n        }\n    }\n\n    fun sendTouch(\n        x: Float,''')
+          replace_once(sc,
+              "        private const val MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE = 13\n        private const val MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC = 15",
+              "        private const val MESSAGE_CLIENT_SUPPORTS_FRAME_TRACE = 13\n        private const val MESSAGE_CLIENT_DISABLES_FRAME_TRACE = 16\n        private const val MESSAGE_CLIENT_SUPPORTS_VIDEO_CLOCK_SYNC = 15")
+
+          ma = "AndroidClient/app/src/main/java/com/sidescreen/app/MainActivity.kt"
+          replace_once(ma,
+              '''                    "trace_start" -> {\n                        val name = command.getStringExtra("output_name") ?: "frame-trace.csv"\n                        val file = FrameTraceRecorder.start(applicationContext, name)\n                        mainDiag("LAB trace started path=${file.absolutePath}")\n                    }\n                    "trace_stop" -> {\n                        FrameTraceRecorder.stop()\n                        mainDiag("LAB trace stopped")\n                    }''',
+              '''                    "trace_start" -> {\n                        val name = command.getStringExtra("output_name") ?: "frame-trace.csv"\n                        val file = FrameTraceRecorder.start(applicationContext, name)\n                        streamClient?.setFrameTracingEnabled(true)\n                        mainDiag("LAB trace started path=${file.absolutePath}")\n                    }\n                    "trace_stop" -> {\n                        streamClient?.setFrameTracingEnabled(false)\n                        FrameTraceRecorder.stop()\n                        mainDiag("LAB trace stopped")\n                    }''')
+
+          ss = "MacHost/Sources/StreamingServer.swift"
+          replace_once(ss,
+              '''    /// Client->server, payload-free opt-in for frame IDs and trace timestamps.\n    static let clientSupportsFrameTrace: UInt8 = 13''',
+              '''    /// Client->server, payload-free opt-in for frame IDs and trace timestamps.\n    static let clientSupportsFrameTrace: UInt8 = 13\n    /// Client->server, payload-free opt-out after a lab trace ends. Unknown to\n    /// older hosts, which safely skip unknown one-byte client messages.\n    static let clientDisablesFrameTrace: UInt8 = 16''')
+          replace_once(ss,
+              '''            case WireMessage.clientSupportsVideoClockSync:''',
+              '''            case WireMessage.clientDisablesFrameTrace:\n                consumeInputBytes(1)\n                if clientSupportsFrameTrace {\n                    clientSupportsFrameTrace = false\n                    debugLog("Client disabled frame trace metadata")\n                }\n\n            case WireMessage.clientSupportsVideoClockSync:''')
+          replace_once(ss,
+              '''            let enqueuedAtNs = DispatchTime.now().uptimeNanoseconds\n            if frame.screenCaptureCallbackTimestampNs >= frame.captureTimestampNs {\n                self.windowServerToCallbackLatency.add(\n                    nanoseconds: frame.screenCaptureCallbackTimestampNs - frame.captureTimestampNs\n                )\n            }\n            self.captureToEncodeLatency.add(\n                nanoseconds: frame.encodeCompleteTimestampNs >= frame.captureTimestampNs\n                    ? frame.encodeCompleteTimestampNs - frame.captureTimestampNs\n                    : 0\n            )\n            self.captureToEnqueueLatency.add(\n                nanoseconds: enqueuedAtNs >= frame.captureTimestampNs\n                    ? enqueuedAtNs - frame.captureTimestampNs\n                    : 0\n            )''',
+              '''            let enqueuedAtNs = DispatchTime.now().uptimeNanoseconds\n            if self.clientSupportsFrameTrace {\n                if frame.screenCaptureCallbackTimestampNs >= frame.captureTimestampNs {\n                    self.windowServerToCallbackLatency.add(\n                        nanoseconds: frame.screenCaptureCallbackTimestampNs - frame.captureTimestampNs\n                    )\n                }\n                self.captureToEncodeLatency.add(\n                    nanoseconds: frame.encodeCompleteTimestampNs >= frame.captureTimestampNs\n                        ? frame.encodeCompleteTimestampNs - frame.captureTimestampNs\n                        : 0\n                )\n                self.captureToEnqueueLatency.add(\n                    nanoseconds: enqueuedAtNs >= frame.captureTimestampNs\n                        ? enqueuedAtNs - frame.captureTimestampNs\n                        : 0\n                )\n            }''')
+          replace_once(ss,
+              '''                    if completedAtNs >= frame.captureTimestampNs {\n                        self.captureToSendCompleteLatency.add(\n                            nanoseconds: completedAtNs - frame.captureTimestampNs\n                        )\n                    }\n                    if completedAtNs >= enqueuedAtNs {\n                        self.enqueueToSendCompleteLatency.add(\n                            nanoseconds: completedAtNs - enqueuedAtNs\n                        )\n                    }''',
+              '''                    if self.clientSupportsFrameTrace {\n                        if completedAtNs >= frame.captureTimestampNs {\n                            self.captureToSendCompleteLatency.add(\n                                nanoseconds: completedAtNs - frame.captureTimestampNs\n                            )\n                        }\n                        if completedAtNs >= enqueuedAtNs {\n                            self.enqueueToSendCompleteLatency.add(\n                                nanoseconds: completedAtNs - enqueuedAtNs\n                            )\n                        }\n                    }''')
+          PY
+      - name: Commit patch if needed
+        run: |
+          if git diff --quiet; then
+            echo "Trace gating already applied"
+            exit 0
+          fi
+          git config user.name "Tablet Bridge CI"
+          git config user.email "145865683+tverma101@users.noreply.github.com"
+          git add AndroidClient/app/src/main/java/com/sidescreen/app/StreamClient.kt \
+                  AndroidClient/app/src/main/java/com/sidescreen/app/MainActivity.kt \
+                  MacHost/Sources/StreamingServer.swift
+          git commit -m "perf(wired): gate frame tracing to lab mode"
+          git push origin HEAD:perf/runtime-efficiency-2026-09-10
