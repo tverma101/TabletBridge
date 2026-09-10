@@ -70,7 +70,10 @@ class StreamClient(
     private var lastKeyframeReceivedNs = 0L
     @Volatile private var macToAndroidOffsetNs: Long? = null
     @Volatile private var videoClockSyncReady = false
-    @Volatile private var frameTracingEnabled = false
+    // Preserve the historical diagnostics on wireless sessions; the normal
+    // USB loopback path skips per-frame trace bookkeeping unless a lab trace
+    // is explicitly started.
+    @Volatile private var frameTracingEnabled = host != "127.0.0.1"
     private var videoClockSyncEstimator = ClockOffsetEstimator()
     private var touchWriteCount = 0L
     private var touchWriteAccumNs = 0L
