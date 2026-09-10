@@ -79,9 +79,14 @@ class StreamClient(
     private var touchWriteAccumNs = 0L
     private var touchWriteMaxNs = 0L
 
-    // Buffer pooling to reduce GC pressure from per-frame allocations
-    // At 60fps with ~100KB frames, this prevents ~6MB/s of allocations
-    private val bufferPool = ArrayDeque<ByteArray>(8)
+    // Buffer pooling to reduce GC pressure from per-frame allocations. The
+    // wired receive callback returns compressed data immediately after it is
+    // copied into MediaCodec, so keeping eight differently-sized arrays on the
+    // USB loopback path only inflates retained heap after large keyframes.
+    // Keep a two-buffer defensive margin for USB; preserve the historical
+    // wireless pool depth.
+    private val bufferPoolCapacity = if (host == "127.0.0.1") 2 else 8
+    private val bufferPool = ArrayDeque<ByteArray>(bufferPoolCapacity)
     private val poolLock = Any()
 
     /**
@@ -109,8 +114,8 @@ class StreamClient(
      */
     fun releaseBuffer(buffer: ByteArray) {
         synchronized(poolLock) {
-            // Keep pool size limited to prevent memory bloat
-            if (bufferPool.size < 8) {
+            // Keep pool size limited to prevent memory bloat.
+            if (bufferPool.size < bufferPoolCapacity) {
                 bufferPool.addLast(buffer)
             }
             // If pool is full, let buffer be GC'd
