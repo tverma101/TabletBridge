@@ -31,9 +31,47 @@ fi
 
 echo "🔧 Setting up USB forwarding: video=$PORT control=$CONTROL_PORT"
 
-# One device query is enough. Do not clear every reverse mapping on the device:
-# other development tools may own unrelated adb reverse entries.
-DEVICE_OUTPUT="$(adb devices)"
+# EXPERIMENTAL: modern ADB can negotiate burst/delayed acknowledgements so a
+# forwarded asocket can keep multiple payloads in flight instead of waiting for
+# one A_OKAY after every A_WRTE. This changes the ADB *server* feature set, so it
+# only takes effect when the server is started with ADB_BURST_MODE=1.
+#
+# Keep it opt-in until Tablet Bridge latency/frame-pacing is A/B measured on the
+# actual tablet: AOSP's published win is USB file-transfer throughput, not an
+# interactive-display latency guarantee.
+#
+# Usage:
+#   TABLETBRIDGE_ADB_BURST=1 ./scripts/setup-usb.sh
+if [[ "${TABLETBRIDGE_ADB_BURST:-0}" == "1" ]]; then
+    echo "🧪 ADB Burst Mode requested — restarting adb server for this experiment"
+    adb kill-server >/dev/null 2>&1 || true
+    ADB_BURST_MODE=1 adb start-server >/dev/null
+
+    SERVER_STATUS="$(adb server-status 2>/dev/null || true)"
+    if grep -Eiq 'burst[_ -]?mode[^[:alnum:]]*(true|1|enabled)' <<<"$SERVER_STATUS"; then
+        echo "  ✓ ADB server reports Burst Mode enabled"
+    else
+        echo "  ⚠ Could not verify Burst Mode; this platform-tools build may not expose/support it"
+    fi
+fi
+
+# One device query is enough in the normal path. After an explicit ADB server
+# restart for Burst Mode, allow USB enumeration a short bounded window to return.
+DEVICE_OUTPUT=""
+ATTEMPTS=1
+if [[ "${TABLETBRIDGE_ADB_BURST:-0}" == "1" ]]; then
+    ATTEMPTS=20
+fi
+for ((i = 1; i <= ATTEMPTS; i++)); do
+    DEVICE_OUTPUT="$(adb devices)"
+    if grep -q $'\tdevice$' <<<"$DEVICE_OUTPUT"; then
+        break
+    fi
+    if (( i < ATTEMPTS )); then
+        sleep 0.25
+    fi
+done
+
 if ! grep -q $'\tdevice$' <<<"$DEVICE_OUTPUT"; then
     echo "❌ No Android device found via ADB"
     echo ""
