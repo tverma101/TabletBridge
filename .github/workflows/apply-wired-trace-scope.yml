@@ -1,0 +1,41 @@
+name: Scope wired trace optimization
+
+on:
+  push:
+    branches:
+      - perf/runtime-efficiency-2026-09-10
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/runtime-efficiency-2026-09-10
+      - name: Preserve wireless tracing behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('AndroidClient/app/src/main/java/com/sidescreen/app/StreamClient.kt')
+          text = p.read_text()
+          old = '    @Volatile private var frameTracingEnabled = false\n'
+          new = '''    // Preserve the historical diagnostics on wireless sessions; the normal\n    // USB loopback path skips per-frame trace bookkeeping unless a lab trace\n    // is explicitly started.\n    @Volatile private var frameTracingEnabled = host != "127.0.0.1"\n'''
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one frameTracingEnabled initializer, got {text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch if needed
+        run: |
+          if git diff --quiet; then
+            echo "Wired trace scope already applied"
+            exit 0
+          fi
+          git config user.name "Tablet Bridge CI"
+          git config user.email "145865683+tverma101@users.noreply.github.com"
+          git add AndroidClient/app/src/main/java/com/sidescreen/app/StreamClient.kt
+          git commit -m "perf(wired): preserve wireless frame tracing"
+          git push origin HEAD:perf/runtime-efficiency-2026-09-10
