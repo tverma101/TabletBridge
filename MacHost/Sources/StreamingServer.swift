@@ -12,6 +12,9 @@ private enum WireMessage {
     static let clientSupportsFrameMetadata: UInt8 = 8
     /// Client->server, payload-free opt-in for frame IDs and trace timestamps.
     static let clientSupportsFrameTrace: UInt8 = 13
+    /// Client->server, payload-free opt-out after a lab trace ends. Unknown to
+    /// older hosts, which safely skip unknown one-byte client messages.
+    static let clientDisablesFrameTrace: UInt8 = 16
     /// Client->server, payload-free opt-in for extended in-band clock-sync
     /// pongs. This is a fallback when the dedicated control socket is not
     /// available during startup.
@@ -831,6 +834,13 @@ class StreamingServer {
                     debugLog("Client supports frame trace metadata")
                 }
 
+            case WireMessage.clientDisablesFrameTrace:
+                consumeInputBytes(1)
+                if clientSupportsFrameTrace {
+                    clientSupportsFrameTrace = false
+                    debugLog("Client disabled frame trace metadata")
+                }
+
             case WireMessage.clientSupportsVideoClockSync:
                 // One-byte opt-in. New clients use the video socket for
                 // clock calibration when the optional dedicated control
@@ -957,21 +967,23 @@ class StreamingServer {
 
             let packet = self.makeFramePacket(frame)
             let enqueuedAtNs = DispatchTime.now().uptimeNanoseconds
-            if frame.screenCaptureCallbackTimestampNs >= frame.captureTimestampNs {
-                self.windowServerToCallbackLatency.add(
-                    nanoseconds: frame.screenCaptureCallbackTimestampNs - frame.captureTimestampNs
+            if self.clientSupportsFrameTrace {
+                if frame.screenCaptureCallbackTimestampNs >= frame.captureTimestampNs {
+                    self.windowServerToCallbackLatency.add(
+                        nanoseconds: frame.screenCaptureCallbackTimestampNs - frame.captureTimestampNs
+                    )
+                }
+                self.captureToEncodeLatency.add(
+                    nanoseconds: frame.encodeCompleteTimestampNs >= frame.captureTimestampNs
+                        ? frame.encodeCompleteTimestampNs - frame.captureTimestampNs
+                        : 0
+                )
+                self.captureToEnqueueLatency.add(
+                    nanoseconds: enqueuedAtNs >= frame.captureTimestampNs
+                        ? enqueuedAtNs - frame.captureTimestampNs
+                        : 0
                 )
             }
-            self.captureToEncodeLatency.add(
-                nanoseconds: frame.encodeCompleteTimestampNs >= frame.captureTimestampNs
-                    ? frame.encodeCompleteTimestampNs - frame.captureTimestampNs
-                    : 0
-            )
-            self.captureToEnqueueLatency.add(
-                nanoseconds: enqueuedAtNs >= frame.captureTimestampNs
-                    ? enqueuedAtNs - frame.captureTimestampNs
-                    : 0
-            )
 
             connection.send(content: packet, completion: .contentProcessed { [weak self] error in
                 let completedAtNs = DispatchTime.now().uptimeNanoseconds
@@ -982,15 +994,17 @@ class StreamingServer {
                         self.backpressure.markNeedsSyncFrame()
                         self.onKeyframeRequested?(true)
                     }
-                    if completedAtNs >= frame.captureTimestampNs {
-                        self.captureToSendCompleteLatency.add(
-                            nanoseconds: completedAtNs - frame.captureTimestampNs
-                        )
-                    }
-                    if completedAtNs >= enqueuedAtNs {
-                        self.enqueueToSendCompleteLatency.add(
-                            nanoseconds: completedAtNs - enqueuedAtNs
-                        )
+                    if self.clientSupportsFrameTrace {
+                        if completedAtNs >= frame.captureTimestampNs {
+                            self.captureToSendCompleteLatency.add(
+                                nanoseconds: completedAtNs - frame.captureTimestampNs
+                            )
+                        }
+                        if completedAtNs >= enqueuedAtNs {
+                            self.enqueueToSendCompleteLatency.add(
+                                nanoseconds: completedAtNs - enqueuedAtNs
+                            )
+                        }
                     }
                     self.lastCompletedFrameID = frame.frameID
                     self.updateStats(bytes: frame.data.count)

@@ -21,7 +21,7 @@ fi
 
 # Check ADB connection first
 echo "📱 Checking ADB connection..."
-if ! adb devices | grep -q "device$"; then
+if ! adb devices | grep -q $'\tdevice$'; then
     echo "❌ No Android device found via ADB"
     echo "   Please connect your device via USB and enable USB debugging"
     exit 1
@@ -102,20 +102,10 @@ adb install -r AndroidClient/app/build/outputs/apk/debug/app-debug.apk
 echo "  ✓ Android app installed"
 echo ""
 
-# Setup ADB reverse (with retry)
-echo "🔧 Setting up USB port forwarding..."
-adb reverse --remove tcp:8888 2>/dev/null || true
-sleep 0.5
-adb reverse tcp:8888 tcp:8888
-
-# Verify ADB reverse is active
-echo "🔍 Verifying port forwarding..."
-if adb reverse --list | grep -q "tcp:8888"; then
-    echo "  ✓ Port 8888 forwarded successfully"
-else
-    echo "  ⚠️  Port forwarding setup but verification failed"
-    echo "  Run './scripts/setup-usb.sh' if connection issues occur"
-fi
+# Configure exactly the two reverse mappings Tablet Bridge owns. The helper
+# reads the same persisted SideScreen_port / SideScreen_controlPort values as
+# the Mac app, so custom ports and the 54321 default stay in sync.
+"$SCRIPT_DIR/setup-usb.sh"
 echo ""
 
 echo "✅ Installation complete!"
@@ -129,6 +119,5 @@ echo "  3. Tap Connect"
 echo ""
 echo "💡 Troubleshooting:"
 echo "  • Connection fails: ./scripts/setup-usb.sh"
-echo "  • Check server: lsof -i :8888"
 echo "  • Check forwarding: adb reverse --list"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

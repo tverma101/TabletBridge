@@ -1167,9 +1167,11 @@ class MainActivity : AppCompatActivity() {
                     "trace_start" -> {
                         val name = command.getStringExtra("output_name") ?: "frame-trace.csv"
                         val file = FrameTraceRecorder.start(applicationContext, name)
+                        streamClient?.setFrameTracingEnabled(true)
                         mainDiag("LAB trace started path=${file.absolutePath}")
                     }
                     "trace_stop" -> {
+                        streamClient?.setFrameTracingEnabled(false)
                         FrameTraceRecorder.stop()
                         mainDiag("LAB trace stopped")
                     }

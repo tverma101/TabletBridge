@@ -14,7 +14,7 @@ if [ ! -f "$APK_PATH" ]; then
 fi
 
 # Check ADB connection
-if ! adb devices | grep -q "device$"; then
+if ! adb devices | grep -q $'\tdevice$'; then
     echo "❌ No Android device found via ADB"
     echo "   Please connect your device via USB and enable USB debugging"
     exit 1
@@ -26,11 +26,10 @@ adb install -r "$APK_PATH"
 echo ""
 echo "✅ App installed successfully!"
 echo ""
-echo "📲 Setting up USB port forwarding..."
-adb reverse --remove tcp:8888 2>/dev/null || true
-adb reverse tcp:8888 tcp:8888
 
-echo "✅ Port 8888 forwarded"
+# Use the single source of truth for the saved/default video + control ports.
+"$SCRIPT_DIR/setup-usb.sh"
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Ready! Open 'Tablet Bridge' on your Android device"
