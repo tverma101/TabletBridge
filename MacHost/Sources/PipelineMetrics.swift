@@ -180,33 +180,43 @@ struct LatencyPercentileSummary: Equatable {
     let maxMs: Double
 }
 
-/// Small bounded percentile window for runtime diagnostics. It is deliberately
-/// allocation-light and is owned by the serial frame queue in production.
+/// Small bounded percentile window for runtime diagnostics. The backing store
+/// is a fixed-size circular buffer so steady-state frame accounting never
+/// shifts an Array with removeFirst() on the 60/120-FPS send path.
 struct LatencyPercentiles {
     private let maxSamples: Int
-    private var samples: [Double] = []
+    private var samples: [Double]
+    private var sampleCount = 0
+    private var nextSampleIndex = 0
 
     init(maxSamples: Int = 240) {
         self.maxSamples = max(1, maxSamples)
-        samples.reserveCapacity(self.maxSamples)
+        self.samples = Array(repeating: 0.0, count: self.maxSamples)
     }
 
-    var count: Int { samples.count }
+    var count: Int { sampleCount }
 
     mutating func add(nanoseconds: UInt64) {
-        samples.append(Double(nanoseconds) / 1_000_000.0)
-        if samples.count > maxSamples {
-            samples.removeFirst(samples.count - maxSamples)
+        samples[nextSampleIndex] = Double(nanoseconds) / 1_000_000.0
+        nextSampleIndex += 1
+        if nextSampleIndex == maxSamples {
+            nextSampleIndex = 0
+        }
+        if sampleCount < maxSamples {
+            sampleCount += 1
         }
     }
 
     mutating func removeAll() {
-        samples.removeAll(keepingCapacity: true)
+        sampleCount = 0
+        nextSampleIndex = 0
     }
 
     func summary() -> LatencyPercentileSummary? {
-        guard !samples.isEmpty else { return nil }
-        let sorted = samples.sorted()
+        guard sampleCount > 0 else { return nil }
+        // Ordering in the ring is irrelevant for percentiles. Copy/sort only
+        // when a summary is requested (roughly once per second), never per frame.
+        let sorted = samples.prefix(sampleCount).sorted()
         return LatencyPercentileSummary(
             count: sorted.count,
             p50Ms: percentile(sorted, fraction: 0.50),
