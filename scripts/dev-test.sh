@@ -71,7 +71,9 @@ echo "  OK"
 
 # 4. Install APK on device
 echo "[4/5] Installing APK..."
-if adb devices | grep -q "device$"; then
+DEVICE_CONNECTED=false
+if adb devices | grep -q $'\tdevice$'; then
+    DEVICE_CONNECTED=true
     adb install -r "$APK" 2>&1 | tail -1
 else
     echo "  No device connected, skipping install"
@@ -82,7 +84,9 @@ echo "[5/5] Starting macOS app..."
 pkill -f "TabletBridge.app" 2>/dev/null || true
 sleep 0.5
 
-adb reverse tcp:8888 tcp:8888 2>/dev/null || true
+if [ "$DEVICE_CONNECTED" = true ]; then
+    "$SCRIPT_DIR/setup-usb.sh" >/dev/null
+fi
 open "$APP_DIR"
 
 echo ""
