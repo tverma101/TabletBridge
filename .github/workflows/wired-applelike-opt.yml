@@ -1,0 +1,89 @@
+name: Wired Apple-like optimization
+
+on:
+  push:
+    branches:
+      - perf/runtime-efficiency-2026-09-10
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  optimize-and-validate:
+    if: ${{ !contains(github.event.head_commit.message || '', '[wired-opt-applied]') }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/runtime-efficiency-2026-09-10
+          fetch-depth: 0
+
+      - name: Apply wired hot-path optimizations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # 1) Android MediaCodec input-index handoff: remove linked-node allocation
+          # from every callback. MediaCodec exposes a small, fixed set of input
+          # buffers, so a preallocated bounded ring is the correct structure.
+          p = Path('AndroidClient/app/src/main/java/com/sidescreen/app/VideoDecoder.kt')
+          s = p.read_text()
+          old = 'import java.util.concurrent.LinkedBlockingQueue\n'
+          new = 'import java.util.concurrent.ArrayBlockingQueue\n'
+          assert old in s, 'VideoDecoder import anchor changed'
+          s = s.replace(old, new, 1)
+          old = '    private val availableInputBuffers = LinkedBlockingQueue<Int>()\n'
+          new = '''    // MediaCodec owns a small fixed pool of input buffers. A linked queue\n    // allocates a node for every callback at frame cadence; a bounded array ring\n    // keeps this hand-off allocation-free while retaining the same blocking/poll API.\n    // 32 is deliberately above practical codec input-buffer counts, so a full\n    // queue indicates a broken/stalled codec session rather than normal pressure.\n    private val availableInputBuffers = ArrayBlockingQueue<Int>(32)\n'''
+          assert old in s, 'VideoDecoder queue anchor changed'
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # 2) macOS sender: stop cloning each encoded frame merely to prepend a
+          # tiny framing header. TCP is a byte stream and the Android client uses
+          # DataInputStream readFully(), so ordered batched header + payload sends
+          # are protocol-identical. Keep backpressure completion on the payload.
+          p = Path('MacHost/Sources/StreamingServer.swift')
+          s = p.read_text()
+          old = '            let packet = self.makeFramePacket(frame)\n'
+          new = '            let header = self.makeFrameHeader(frame)\n'
+          assert old in s, 'StreamingServer packet anchor changed'
+          s = s.replace(old, new, 1)
+
+          old = '''            connection.send(content: packet, completion: .contentProcessed { [weak self] error in\n                let completedAtNs = DispatchTime.now().uptimeNanoseconds\n                self?.frameQueue.async {\n                    guard let self = self else { return }\n                    self.backpressure.complete(reservation)\n                    if error != nil {\n                        self.backpressure.markNeedsSyncFrame()\n                        self.onKeyframeRequested?(true)\n                    }\n                    if self.clientSupportsFrameTrace {\n                        if completedAtNs >= frame.captureTimestampNs {\n                            self.captureToSendCompleteLatency.add(\n                                nanoseconds: completedAtNs - frame.captureTimestampNs\n                            )\n                        }\n                        if completedAtNs >= enqueuedAtNs {\n                            self.enqueueToSendCompleteLatency.add(\n                                nanoseconds: completedAtNs - enqueuedAtNs\n                            )\n                        }\n                    }\n                    self.lastCompletedFrameID = frame.frameID\n                    self.updateStats(bytes: frame.data.count)\n                }\n            })\n'''
+          new = '''            // Avoid a full encoded-frame memcpy. Network.framework preserves\n            // send order on this TCP connection; batching lets the tiny header and\n            // the existing VideoToolbox Data travel as one ordered stream without\n            // constructing header+payload in a second large Data allocation.\n            connection.batch {\n                connection.send(content: header, completion: .idempotent)\n                connection.send(content: frame.data, completion: .contentProcessed { [weak self] error in\n                    let completedAtNs = DispatchTime.now().uptimeNanoseconds\n                    self?.frameQueue.async {\n                        guard let self = self else { return }\n                        self.backpressure.complete(reservation)\n                        if error != nil {\n                            self.backpressure.markNeedsSyncFrame()\n                            self.onKeyframeRequested?(true)\n                        }\n                        if self.clientSupportsFrameTrace {\n                            if completedAtNs >= frame.captureTimestampNs {\n                                self.captureToSendCompleteLatency.add(\n                                    nanoseconds: completedAtNs - frame.captureTimestampNs\n                                )\n                            }\n                            if completedAtNs >= enqueuedAtNs {\n                                self.enqueueToSendCompleteLatency.add(\n                                    nanoseconds: completedAtNs - enqueuedAtNs\n                                )\n                            }\n                        }\n                        self.lastCompletedFrameID = frame.frameID\n                        self.updateStats(bytes: frame.data.count)\n                    }\n                })\n            }\n'''
+          assert old in s, 'StreamingServer send block anchor changed'
+          s = s.replace(old, new, 1)
+
+          old = '''    private func makeFramePacket(_ frame: EncodedVideoFrame) -> Data {\n        if clientSupportsFrameTrace {\n            var packet = Data(capacity: frame.data.count + 22)\n            packet.append(WireMessage.videoFrameWithTrace)\n            appendFrameSize(frame.data.count, to: &packet)\n            packet.append(frame.isKeyframe ? 1 : 0)\n            var frameID = frame.frameID.bigEndian\n            withUnsafeBytes(of: &frameID) { packet.append(contentsOf: $0) }\n            var captureTimestamp = frame.captureTimestampNs.bigEndian\n            withUnsafeBytes(of: &captureTimestamp) { packet.append(contentsOf: $0) }\n            packet.append(frame.data)\n            return packet\n        }\n\n        if clientSupportsFrameMetadata {\n            var packet = Data(capacity: frame.data.count + 14)\n            packet.append(WireMessage.videoFrameWithMetadata)\n            appendFrameSize(frame.data.count, to: &packet)\n            packet.append(frame.isKeyframe ? 1 : 0)\n            var captureTimestamp = frame.captureTimestampNs.bigEndian\n            withUnsafeBytes(of: &captureTimestamp) { packet.append(contentsOf: $0) }\n            packet.append(frame.data)\n            return packet\n        }\n\n        // Keep legacy frame type 0 for clients that do not advertise\n        // metadata support; remove after legacy clients age out.\n        var packet = Data(capacity: frame.data.count + 5)\n        packet.append(WireMessage.legacyVideoFrame)\n        appendFrameSize(frame.data.count, to: &packet)\n        packet.append(frame.data)\n        return packet\n    }\n'''
+          new = '''    /// Build only the framing bytes. The encoded payload is sent separately\n    /// from its existing VideoToolbox-backed Data to avoid copying every frame.\n    private func makeFrameHeader(_ frame: EncodedVideoFrame) -> Data {\n        if clientSupportsFrameTrace {\n            var header = Data(capacity: 22)\n            header.append(WireMessage.videoFrameWithTrace)\n            appendFrameSize(frame.data.count, to: &header)\n            header.append(frame.isKeyframe ? 1 : 0)\n            var frameID = frame.frameID.bigEndian\n            withUnsafeBytes(of: &frameID) { header.append(contentsOf: $0) }\n            var captureTimestamp = frame.captureTimestampNs.bigEndian\n            withUnsafeBytes(of: &captureTimestamp) { header.append(contentsOf: $0) }\n            return header\n        }\n\n        if clientSupportsFrameMetadata {\n            var header = Data(capacity: 14)\n            header.append(WireMessage.videoFrameWithMetadata)\n            appendFrameSize(frame.data.count, to: &header)\n            header.append(frame.isKeyframe ? 1 : 0)\n            var captureTimestamp = frame.captureTimestampNs.bigEndian\n            withUnsafeBytes(of: &captureTimestamp) { header.append(contentsOf: $0) }\n            return header\n        }\n\n        // Keep legacy frame type 0 for clients that do not advertise\n        // metadata support; remove after legacy clients age out.\n        var header = Data(capacity: 5)\n        header.append(WireMessage.legacyVideoFrame)\n        appendFrameSize(frame.data.count, to: &header)\n        return header\n    }\n'''
+          assert old in s, 'StreamingServer makeFramePacket anchor changed'
+          s = s.replace(old, new, 1)
+
+          # Drop two normal-operation logs from the dedicated control hot path.
+          # The existing sampled touch statistics and error logs remain.
+          s = s.replace('                debugLog("Control receive \\(data.count)B")\n', '', 1)
+          s = s.replace('                debugLog(String(format: "CTRL pong: procDelay=%.3fms", procDelayMs))\n', '                _ = procDelayMs  // retained for debugger inspection without per-ping logging\n', 1)
+          p.write_text(s)
+
+      - name: Validate Android
+        working-directory: AndroidClient
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testDebugUnitTest assembleDebug --stacktrace
+
+      - name: Validate macOS
+        working-directory: MacHost
+        run: |
+          swift test
+          swift build -c release
+
+      - name: Commit validated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add AndroidClient/app/src/main/java/com/sidescreen/app/VideoDecoder.kt MacHost/Sources/StreamingServer.swift
+          git diff --cached --check
+          git commit -m "perf: remove wired frame copy and codec queue churn [wired-opt-applied]"
+          git push origin HEAD:perf/runtime-efficiency-2026-09-10
