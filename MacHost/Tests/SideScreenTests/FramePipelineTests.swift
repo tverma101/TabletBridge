@@ -48,4 +48,23 @@ final class FramePipelineTests: XCTestCase {
         XCTAssertEqual(summary.p99Ms, 4, accuracy: 0.001)
         XCTAssertEqual(summary.maxMs, 4, accuracy: 0.001)
     }
+
+    func testLatencyWindowOverwritesOldestSamplesWithoutGrowing() throws {
+        var window = LatencyPercentiles(maxSamples: 4)
+        for milliseconds in 1...6 {
+            window.add(nanoseconds: UInt64(milliseconds) * 1_000_000)
+        }
+
+        let summary = try XCTUnwrap(window.summary())
+        XCTAssertEqual(window.count, 4)
+        XCTAssertEqual(summary.count, 4)
+        XCTAssertEqual(summary.p50Ms, 4, accuracy: 0.001)
+        XCTAssertEqual(summary.p95Ms, 6, accuracy: 0.001)
+        XCTAssertEqual(summary.p99Ms, 6, accuracy: 0.001)
+        XCTAssertEqual(summary.maxMs, 6, accuracy: 0.001)
+
+        window.removeAll()
+        XCTAssertEqual(window.count, 0)
+        XCTAssertNil(window.summary())
+    }
 }

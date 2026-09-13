@@ -62,6 +62,16 @@ class ControlChannel(
 
     private val sendLock = Any()
     private val connectLock = Any()
+
+    // Control writes are serialized by sendLock, so reuse their tiny wire
+    // buffers instead of allocating a ByteBuffer for every 60/120-Hz touch.
+    // The packet arrays never escape this object; DataOutputStream.write copies
+    // their bytes into the socket before the lock is released.
+    private val touchPacketBytes = ByteArray(MAX_TOUCH_PACKET_BYTES)
+    private val touchPacketWriter = ByteBuffer.wrap(touchPacketBytes).order(ByteOrder.LITTLE_ENDIAN)
+    private val pingPacketBytes = ByteArray(PING_PACKET_BYTES)
+    private val pingPacketWriter = ByteBuffer.wrap(pingPacketBytes).order(ByteOrder.LITTLE_ENDIAN)
+
     @Volatile private var boundNetwork: Network? = null
 
     val isConnected: Boolean
@@ -149,6 +159,10 @@ class ControlChannel(
         }
         try {
             val input = DataInputStream(BufferedInputStream(s.getInputStream(), 4096))
+            // Pongs arrive serially on this one reader thread. Reuse one buffer
+            // for both the 16-byte legacy and 24-byte clock-sync payloads.
+            val pongBytes = ByteArray(CLOCK_SYNC_PONG_BYTES)
+            val pongReader = ByteBuffer.wrap(pongBytes).order(ByteOrder.LITTLE_ENDIAN)
             while (running && socket === s) {
                 val type = input.readByte().toInt()
                 val arrival = System.nanoTime()
@@ -157,14 +171,14 @@ class ControlChannel(
                         // New hosts return t0, t1=Mac receive, t2=Mac send.
                         // Old hosts return only t0 and t2; capability is sent
                         // before the first periodic ping.
-                        val buf = ByteArray(if (clockSyncReady) 24 else 16)
-                        input.readFully(buf)
-                        val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-                        val clientTs = bb.long
+                        val payloadBytes = if (clockSyncReady) CLOCK_SYNC_PONG_BYTES else LEGACY_PONG_BYTES
+                        input.readFully(pongBytes, 0, payloadBytes)
+                        pongReader.clear()
+                        val clientTs = pongReader.long
                         val rtt: Double
                         if (clockSyncReady) {
-                            val serverReceiveTs = bb.long
-                            val serverSendTs = bb.long
+                            val serverReceiveTs = pongReader.long
+                            val serverSendTs = pongReader.long
                             val receivedAt = System.nanoTime()
                             val estimate = clockSyncEstimator.addSample(
                                 androidSendNs = clientTs,
@@ -177,7 +191,7 @@ class ControlChannel(
                                 onClockSyncMeasured?.invoke(estimate)
                             }
                         } else {
-                            bb.long // legacy server send timestamp
+                            pongReader.long // legacy server send timestamp
                             rtt = (arrival - clientTs) / 1_000_000.0
                         }
                         val processedAt = System.nanoTime()
@@ -232,7 +246,7 @@ class ControlChannel(
         val out = output ?: return
         synchronized(sendLock) {
             try {
-                out.write(byteArrayOf(3))
+                out.writeByte(3)
                 out.flush()
                 DiagLog.log("CC", "Declared brightness support")
             } catch (e: Exception) {
@@ -268,10 +282,10 @@ class ControlChannel(
         val ts = System.nanoTime()
         synchronized(sendLock) {
             return try {
-                val buffer = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN)
-                buffer.put(4.toByte())
-                buffer.putLong(ts)
-                out.write(buffer.array())
+                pingPacketWriter.clear()
+                pingPacketWriter.put(4.toByte())
+                pingPacketWriter.putLong(ts)
+                out.write(pingPacketBytes, 0, PING_PACKET_BYTES)
                 out.flush()
                 lastPingSentAtNs = ts
                 true
@@ -289,7 +303,8 @@ class ControlChannel(
         val out = output ?: return false
         synchronized(sendLock) {
             return try {
-                out.write(byteArrayOf(7.toByte(), if (force) 1 else 0))
+                out.writeByte(7)
+                out.writeByte(if (force) 1 else 0)
                 out.flush()
                 true
             } catch (e: Exception) {
@@ -312,20 +327,21 @@ class ControlChannel(
         val activeSocket = socket ?: return false
         val out = output ?: return false
         val count = pointerCount.coerceIn(1, 2)
-        val buffer = ByteBuffer.allocate(6 + count * 8).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.put(2.toByte())
-        buffer.put(count.toByte())
-        buffer.putFloat(x)
-        buffer.putFloat(y)
-        if (count == 2) {
-            buffer.putFloat(x2)
-            buffer.putFloat(y2)
-        }
-        buffer.putInt(action)
+        val packetBytes = 6 + count * 8
 
         synchronized(sendLock) {
             return try {
-                out.write(buffer.array())
+                touchPacketWriter.clear()
+                touchPacketWriter.put(2.toByte())
+                touchPacketWriter.put(count.toByte())
+                touchPacketWriter.putFloat(x)
+                touchPacketWriter.putFloat(y)
+                if (count == 2) {
+                    touchPacketWriter.putFloat(x2)
+                    touchPacketWriter.putFloat(y2)
+                }
+                touchPacketWriter.putInt(action)
+                out.write(touchPacketBytes, 0, packetBytes)
                 out.flush()
                 true
             } catch (e: Exception) {
@@ -378,5 +394,9 @@ class ControlChannel(
     private companion object {
         const val PONG_TIMEOUT_NS = 3_000_000_000L
         const val DIAGNOSTIC_SAMPLE_INTERVAL_MS = 10_000L
+        const val PING_PACKET_BYTES = 9
+        const val LEGACY_PONG_BYTES = 16
+        const val CLOCK_SYNC_PONG_BYTES = 24
+        const val MAX_TOUCH_PACKET_BYTES = 22
     }
 }

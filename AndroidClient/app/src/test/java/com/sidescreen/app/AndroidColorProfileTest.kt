@@ -7,8 +7,10 @@ import org.junit.Test
 
 class AndroidColorProfileTest {
     @Test
-    fun usbProfileUsesTheMeasuredNeutralAnchoredToneCurve() {
-        assertTrue(AndroidColorProfile.DEFAULT_ENABLED)
+    fun usbProfileIsOptionalAndKeepsTheMeasuredNeutralAnchoredToneCurve() {
+        // Wired efficiency default: direct MediaCodec -> Surface. The measured
+        // calibration remains intact and can still be enabled explicitly.
+        assertFalse(AndroidColorProfile.DEFAULT_ENABLED)
         assertTrue(AndroidColorProfile.GLSL_FUNCTION.contains("55.0 / 255.0"))
         assertTrue(AndroidColorProfile.GLSL_FUNCTION.contains("130.0 / 255.0"))
         assertTrue(AndroidColorProfile.GLSL_FUNCTION.contains("204.0 / 255.0"))

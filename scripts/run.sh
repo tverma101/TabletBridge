@@ -32,12 +32,11 @@ echo ""
 echo "✅ Mac app started!"
 echo ""
 
-# Setup USB if device connected
-if adb devices 2>/dev/null | grep -q "device$"; then
+# Setup both the video and low-latency control reverse mappings with the same
+# saved ports the Mac app uses. setup-usb.sh performs one verification snapshot.
+if adb devices 2>/dev/null | grep -q $'\tdevice$'; then
     echo "📱 Android device detected, setting up USB..."
-    adb reverse --remove tcp:8888 2>/dev/null || true
-    adb reverse tcp:8888 tcp:8888
-    echo "  ✓ Port forwarding ready"
+    "$SCRIPT_DIR/setup-usb.sh"
 fi
 
 echo ""

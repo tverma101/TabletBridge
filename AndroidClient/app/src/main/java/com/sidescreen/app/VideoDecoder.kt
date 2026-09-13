@@ -10,7 +10,7 @@ import android.os.Process
 import android.util.Log
 import android.view.Display
 import android.view.Surface
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -120,7 +120,12 @@ class VideoDecoder(
     private var queuedInputCount = 0L
 
     // Available input buffer indices — fed by onInputBufferAvailable callback
-    private val availableInputBuffers = LinkedBlockingQueue<Int>()
+    // MediaCodec owns a small fixed pool of input buffers. A linked queue
+    // allocates a node for every callback at frame cadence; a bounded array ring
+    // keeps this hand-off allocation-free while retaining the same blocking/poll API.
+    // 32 is deliberately above practical codec input-buffer counts, so a full
+    // queue indicates a broken/stalled codec session rather than normal pressure.
+    private val availableInputBuffers = ArrayBlockingQueue<Int>(32)
 
     init {
         setupDecoder()
