@@ -275,7 +275,6 @@ class StreamingServer {
                 return
             }
             if let data = data, !data.isEmpty {
-                debugLog("Control receive \(data.count)B")
                 self.controlInputBuffer.append(data)
                 self.processControlBuffer(connection: connection)
             }
@@ -348,7 +347,7 @@ class StreamingServer {
                     withUnsafeBytes(of: &sendTs) { pong.append(contentsOf: $0) }
                 }
                 let procDelayMs = Double(sendTs - receivedAt) / 1_000_000.0
-                debugLog(String(format: "CTRL pong: procDelay=%.3fms", procDelayMs))
+                _ = procDelayMs  // retained for debugger inspection without per-ping logging
                 connection.send(content: pong, completion: .contentProcessed { _ in })
 
             case WireMessage.keyframeRequest:
@@ -965,7 +964,7 @@ class StreamingServer {
                 return
             }
 
-            let packet = self.makeFramePacket(frame)
+            let header = self.makeFrameHeader(frame)
             let enqueuedAtNs = DispatchTime.now().uptimeNanoseconds
             if self.clientSupportsFrameTrace {
                 if frame.screenCaptureCallbackTimestampNs >= frame.captureTimestampNs {
@@ -985,66 +984,72 @@ class StreamingServer {
                 )
             }
 
-            connection.send(content: packet, completion: .contentProcessed { [weak self] error in
-                let completedAtNs = DispatchTime.now().uptimeNanoseconds
-                self?.frameQueue.async {
-                    guard let self = self else { return }
-                    self.backpressure.complete(reservation)
-                    if error != nil {
-                        self.backpressure.markNeedsSyncFrame()
-                        self.onKeyframeRequested?(true)
-                    }
-                    if self.clientSupportsFrameTrace {
-                        if completedAtNs >= frame.captureTimestampNs {
-                            self.captureToSendCompleteLatency.add(
-                                nanoseconds: completedAtNs - frame.captureTimestampNs
-                            )
+            // Avoid a full encoded-frame memcpy. Network.framework preserves
+            // send order on this TCP connection; batching lets the tiny header and
+            // the existing VideoToolbox Data travel as one ordered stream without
+            // constructing header+payload in a second large Data allocation.
+            connection.batch {
+                connection.send(content: header, completion: .idempotent)
+                connection.send(content: frame.data, completion: .contentProcessed { [weak self] error in
+                    let completedAtNs = DispatchTime.now().uptimeNanoseconds
+                    self?.frameQueue.async {
+                        guard let self = self else { return }
+                        self.backpressure.complete(reservation)
+                        if error != nil {
+                            self.backpressure.markNeedsSyncFrame()
+                            self.onKeyframeRequested?(true)
                         }
-                        if completedAtNs >= enqueuedAtNs {
-                            self.enqueueToSendCompleteLatency.add(
-                                nanoseconds: completedAtNs - enqueuedAtNs
-                            )
+                        if self.clientSupportsFrameTrace {
+                            if completedAtNs >= frame.captureTimestampNs {
+                                self.captureToSendCompleteLatency.add(
+                                    nanoseconds: completedAtNs - frame.captureTimestampNs
+                                )
+                            }
+                            if completedAtNs >= enqueuedAtNs {
+                                self.enqueueToSendCompleteLatency.add(
+                                    nanoseconds: completedAtNs - enqueuedAtNs
+                                )
+                            }
                         }
+                        self.lastCompletedFrameID = frame.frameID
+                        self.updateStats(bytes: frame.data.count)
                     }
-                    self.lastCompletedFrameID = frame.frameID
-                    self.updateStats(bytes: frame.data.count)
-                }
-            })
+                })
+            }
         }
     }
 
-    private func makeFramePacket(_ frame: EncodedVideoFrame) -> Data {
+    /// Build only the framing bytes. The encoded payload is sent separately
+    /// from its existing VideoToolbox-backed Data to avoid copying every frame.
+    private func makeFrameHeader(_ frame: EncodedVideoFrame) -> Data {
         if clientSupportsFrameTrace {
-            var packet = Data(capacity: frame.data.count + 22)
-            packet.append(WireMessage.videoFrameWithTrace)
-            appendFrameSize(frame.data.count, to: &packet)
-            packet.append(frame.isKeyframe ? 1 : 0)
+            var header = Data(capacity: 22)
+            header.append(WireMessage.videoFrameWithTrace)
+            appendFrameSize(frame.data.count, to: &header)
+            header.append(frame.isKeyframe ? 1 : 0)
             var frameID = frame.frameID.bigEndian
-            withUnsafeBytes(of: &frameID) { packet.append(contentsOf: $0) }
+            withUnsafeBytes(of: &frameID) { header.append(contentsOf: $0) }
             var captureTimestamp = frame.captureTimestampNs.bigEndian
-            withUnsafeBytes(of: &captureTimestamp) { packet.append(contentsOf: $0) }
-            packet.append(frame.data)
-            return packet
+            withUnsafeBytes(of: &captureTimestamp) { header.append(contentsOf: $0) }
+            return header
         }
 
         if clientSupportsFrameMetadata {
-            var packet = Data(capacity: frame.data.count + 14)
-            packet.append(WireMessage.videoFrameWithMetadata)
-            appendFrameSize(frame.data.count, to: &packet)
-            packet.append(frame.isKeyframe ? 1 : 0)
+            var header = Data(capacity: 14)
+            header.append(WireMessage.videoFrameWithMetadata)
+            appendFrameSize(frame.data.count, to: &header)
+            header.append(frame.isKeyframe ? 1 : 0)
             var captureTimestamp = frame.captureTimestampNs.bigEndian
-            withUnsafeBytes(of: &captureTimestamp) { packet.append(contentsOf: $0) }
-            packet.append(frame.data)
-            return packet
+            withUnsafeBytes(of: &captureTimestamp) { header.append(contentsOf: $0) }
+            return header
         }
 
         // Keep legacy frame type 0 for clients that do not advertise
         // metadata support; remove after legacy clients age out.
-        var packet = Data(capacity: frame.data.count + 5)
-        packet.append(WireMessage.legacyVideoFrame)
-        appendFrameSize(frame.data.count, to: &packet)
-        packet.append(frame.data)
-        return packet
+        var header = Data(capacity: 5)
+        header.append(WireMessage.legacyVideoFrame)
+        appendFrameSize(frame.data.count, to: &header)
+        return header
     }
 
     private func appendFrameSize(_ size: Int, to packet: inout Data) {
